@@ -161,3 +161,59 @@ int tcc_pos(const char* text, int** positions) {
     
     return count;
 }
+
+char** tcc_segment(const char* text, int* token_count) {
+    if (!text || !token_count) {
+        if (token_count) *token_count = 0;
+        return NULL;
+    }
+    
+    int len = strlen(text);
+    if (len == 0) {
+        *token_count = 0;
+        return NULL;
+    }
+    
+    int* positions = NULL;
+    int count = tcc_pos(text, &positions);
+    if (count <= 0 || !positions) {
+        *token_count = 0;
+        return NULL;
+    }
+    
+    char** tokens = (char**)malloc(count * sizeof(char*));
+    if (!tokens) {
+        free(positions);
+        *token_count = 0;
+        return NULL;
+    }
+    
+    int prev_pos = 0;
+    for (int i = 0; i < count; i++) {
+        int cur_pos = positions[i];
+        int tok_len = cur_pos - prev_pos;
+        tokens[i] = (char*)malloc(tok_len + 1);
+        if (!tokens[i]) {
+            for (int j = 0; j < i; j++) free(tokens[j]);
+            free(tokens);
+            free(positions);
+            *token_count = 0;
+            return NULL;
+        }
+        memcpy(tokens[i], text + prev_pos, tok_len);
+        tokens[i][tok_len] = '\0';
+        prev_pos = cur_pos;
+    }
+    
+    free(positions);
+    *token_count = count;
+    return tokens;
+}
+
+void tcc_free_result(char** tokens, int token_count) {
+    if (!tokens) return;
+    for (int i = 0; i < token_count; i++) {
+        if (tokens[i]) free(tokens[i]);
+    }
+    free(tokens);
+}

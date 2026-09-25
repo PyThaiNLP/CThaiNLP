@@ -200,6 +200,41 @@ class TestCompatibility(unittest.TestCase):
             word_tokenize("สีหน้า(รถ)", engine="newmm"), ["สีหน้า", "(", "รถ", ")"]
         )
 
+    def test_additional_tokenize_apis(self):
+        """Test additional tokenization APIs ported from PyThaiNLP"""
+        from cthainlp.tokenize import (
+            display_cell_tokenize,
+            word_detokenize,
+            sent_tokenize,
+            subword_tokenize,
+        )
+        from cthainlp import sent_tokenize as top_sent_tok
+        from cthainlp import subword_tokenize as top_subword_tok
+
+        # display_cell_tokenize
+        self.assertEqual(display_cell_tokenize(""), [])
+        cells = display_cell_tokenize("แม่น้ำอยู่ที่ไหน")
+        self.assertEqual(cells, ['แ', 'ม่', 'น้ํ', 'า', 'อ', 'ยู่', 'ที่', 'ไ', 'ห', 'น'])
+
+        # word_detokenize
+        self.assertEqual(word_detokenize([]), "")
+        self.assertEqual(word_detokenize([], output="list"), [])
+        self.assertEqual(word_detokenize(["เรา", "เล่น"]), "เราเล่น")
+
+        # sent_tokenize
+        self.assertEqual(sent_tokenize(""), [])
+        sents = sent_tokenize("ฉันไปประชุมเมื่อวันที่ 11 มีนาคม", engine="whitespace")
+        self.assertEqual(sents, ["ฉันไปประชุมเมื่อวันที่", "11", "มีนาคม"])
+        sents_nl = sent_tokenize("ฉันไปประชุม\nเมื่อวันที่ 11 มีนาคม", engine="whitespace+newline")
+        self.assertEqual(sents_nl, ["ฉันไปประชุม", "เมื่อวันที่", "11", "มีนาคม"])
+        self.assertEqual(top_sent_tok("ฉันไป 11 มีนาคม"), ["ฉันไป", "11", "มีนาคม"])
+
+        # subword_tokenize
+        self.assertEqual(subword_tokenize(""), [])
+        subwords = subword_tokenize("ฉันไปโรงเรียน")
+        self.assertEqual(subwords, ["ฉั", "น", "ไป", "โรง", "เรี", "ยน"])
+        self.assertEqual(top_subword_tok("ฉันไปโรงเรียน"), ["ฉั", "น", "ไป", "โรง", "เรี", "ยน"])
+
 
 def run_tests():
     """Run all tests"""

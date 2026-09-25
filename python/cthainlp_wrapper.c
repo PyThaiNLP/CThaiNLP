@@ -8,6 +8,9 @@
 #include <string.h>
 #include <stdlib.h>
 #include "newmm.h"
+#include "tcc.h"
+#include "util.h"
+#include "soundex.h"
 
 /* Module-level dictionary cache */
 static struct {
@@ -133,31 +136,285 @@ static PyObject* py_clear_cache(PyObject* Py_UNUSED(self), PyObject* Py_UNUSED(a
 }
 
 /**
+ * Python wrapper for tcc_segment
+ */
+static PyObject* py_tcc_segment(PyObject* Py_UNUSED(self), PyObject* args) {
+    const char* text;
+    if (!PyArg_ParseTuple(args, "s", &text)) {
+        return NULL;
+    }
+    
+    if (!text || text[0] == '\0') {
+        return PyList_New(0);
+    }
+    
+    int token_count = 0;
+    char** tokens = tcc_segment(text, &token_count);
+    if (!tokens) {
+        return PyList_New(0);
+    }
+    
+    PyObject* result = PyList_New(token_count);
+    if (!result) {
+        tcc_free_result(tokens, token_count);
+        return NULL;
+    }
+    
+    for (int i = 0; i < token_count; i++) {
+        PyObject* token_str = PyUnicode_FromString(tokens[i]);
+        if (!token_str) {
+            Py_DECREF(result);
+            tcc_free_result(tokens, token_count);
+            return NULL;
+        }
+        PyList_SET_ITEM(result, i, token_str);
+    }
+    
+    tcc_free_result(tokens, token_count);
+    return result;
+}
+
+/**
+ * Python wrapper for tcc_pos
+ */
+static PyObject* py_tcc_pos(PyObject* Py_UNUSED(self), PyObject* args) {
+    const char* text;
+    if (!PyArg_ParseTuple(args, "s", &text)) {
+        return NULL;
+    }
+    
+    if (!text || text[0] == '\0') {
+        return PyList_New(0);
+    }
+    
+    int* positions = NULL;
+    int count = tcc_pos(text, &positions);
+    if (count <= 0 || !positions) {
+        return PyList_New(0);
+    }
+    
+    PyObject* result = PyList_New(count);
+    if (!result) {
+        free(positions);
+        return NULL;
+    }
+    
+    for (int i = 0; i < count; i++) {
+        PyObject* pos_val = PyLong_FromLong(positions[i]);
+        if (!pos_val) {
+            Py_DECREF(result);
+            free(positions);
+            return NULL;
+        }
+        PyList_SET_ITEM(result, i, pos_val);
+    }
+    
+    free(positions);
+    return result;
+}
+
+/**
+ * Python wrapper for is_thai_char
+ */
+static PyObject* py_is_thai_char(PyObject* Py_UNUSED(self), PyObject* args) {
+    const char* ch;
+    if (!PyArg_ParseTuple(args, "s", &ch)) {
+        return NULL;
+    }
+    return PyBool_FromLong(is_thai_char(ch));
+}
+
+/**
+ * Python wrapper for is_thai
+ */
+static PyObject* py_is_thai(PyObject* Py_UNUSED(self), PyObject* args, PyObject* kwargs) {
+    const char* text;
+    const char* ignore_chars = ".";
+    
+    static char* kwlist[] = {"text", "ignore_chars", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "s|z", kwlist, &text, &ignore_chars)) {
+        return NULL;
+    }
+    
+    return PyBool_FromLong(is_thai(text, ignore_chars));
+}
+
+/**
+ * Python wrapper for count_thai
+ */
+static PyObject* py_count_thai(PyObject* Py_UNUSED(self), PyObject* args, PyObject* kwargs) {
+    const char* text;
+    const char* ignore_chars = NULL;
+    
+    static char* kwlist[] = {"text", "ignore_chars", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "s|z", kwlist, &text, &ignore_chars)) {
+        return NULL;
+    }
+    
+    double result = count_thai(text, ignore_chars);
+    return PyFloat_FromDouble(result);
+}
+
+/**
+ * Python wrapper for arabic_digit_to_thai_digit
+ */
+static PyObject* py_arabic_digit_to_thai_digit(PyObject* Py_UNUSED(self), PyObject* args) {
+    const char* text;
+    if (!PyArg_ParseTuple(args, "s", &text)) {
+        return NULL;
+    }
+    char* result = arabic_digit_to_thai_digit(text);
+    if (!result) {
+        Py_RETURN_NONE;
+    }
+    PyObject* py_res = PyUnicode_FromString(result);
+    cthainlp_free_string(result);
+    return py_res;
+}
+
+/**
+ * Python wrapper for thai_digit_to_arabic_digit
+ */
+static PyObject* py_thai_digit_to_arabic_digit(PyObject* Py_UNUSED(self), PyObject* args) {
+    const char* text;
+    if (!PyArg_ParseTuple(args, "s", &text)) {
+        return NULL;
+    }
+    char* result = thai_digit_to_arabic_digit(text);
+    if (!result) {
+        Py_RETURN_NONE;
+    }
+    PyObject* py_res = PyUnicode_FromString(result);
+    cthainlp_free_string(result);
+    return py_res;
+}
+
+/**
+ * Python wrapper for remove_tonemark
+ */
+static PyObject* py_remove_tonemark(PyObject* Py_UNUSED(self), PyObject* args) {
+    const char* text;
+    if (!PyArg_ParseTuple(args, "s", &text)) {
+        return NULL;
+    }
+    char* result = remove_tonemark(text);
+    if (!result) {
+        Py_RETURN_NONE;
+    }
+    PyObject* py_res = PyUnicode_FromString(result);
+    cthainlp_free_string(result);
+    return py_res;
+}
+
+/**
+ * Python wrapper for soundex_lk82
+ */
+static PyObject* py_soundex_lk82(PyObject* Py_UNUSED(self), PyObject* args) {
+    const char* text;
+    if (!PyArg_ParseTuple(args, "s", &text)) {
+        return NULL;
+    }
+    char* result = soundex_lk82(text);
+    if (!result) {
+        return PyUnicode_FromString("");
+    }
+    PyObject* py_res = PyUnicode_FromString(result);
+    soundex_free(result);
+    return py_res;
+}
+
+/**
+ * Python wrapper for soundex_udom83
+ */
+static PyObject* py_soundex_udom83(PyObject* Py_UNUSED(self), PyObject* args) {
+    const char* text;
+    if (!PyArg_ParseTuple(args, "s", &text)) {
+        return NULL;
+    }
+    char* result = soundex_udom83(text);
+    if (!result) {
+        return PyUnicode_FromString("");
+    }
+    PyObject* py_res = PyUnicode_FromString(result);
+    soundex_free(result);
+    return py_res;
+}
+
+/**
  * Module method definitions
  */
 static PyMethodDef CThaiNLPMethods[] = {
     {
         "segment",
-        (PyCFunction)py_newmm_segment,
+        (PyCFunction)(void(*)(void))py_newmm_segment,
         METH_VARARGS | METH_KEYWORDS,
-        "Segment Thai text into words using newmm algorithm.\n\n"
-        "Args:\n"
-        "    text (str): Input Thai text to segment (UTF-8 encoded)\n"
-        "    dict_path (str, optional): Path to dictionary file. If None, uses default.\n\n"
-        "Returns:\n"
-        "    list: List of string tokens\n\n"
-        "Example:\n"
-        "    >>> from cthainlp import _cthainlp\n"
-        "    >>> tokens = _cthainlp.segment('ฉันไปโรงเรียน')\n"
-        "    >>> print(tokens)\n"
-        "    ['ฉัน', 'ไป', 'โรงเรียน']\n"
+        "Segment Thai text into words using newmm algorithm.\n"
     },
     {
         "clear_cache",
         py_clear_cache,
         METH_NOARGS,
-        "Clear the cached dictionary.\n\n"
-        "This forces the next tokenization to reload the dictionary.\n"
+        "Clear the cached dictionary.\n"
+    },
+    {
+        "tcc_segment",
+        py_tcc_segment,
+        METH_VARARGS,
+        "Segment Thai text into Thai Character Clusters (TCC).\n"
+    },
+    {
+        "tcc_pos",
+        py_tcc_pos,
+        METH_VARARGS,
+        "Get ending byte positions of Thai Character Clusters.\n"
+    },
+    {
+        "is_thai_char",
+        py_is_thai_char,
+        METH_VARARGS,
+        "Check if character is a Thai character.\n"
+    },
+    {
+        "is_thai",
+        (PyCFunction)(void(*)(void))py_is_thai,
+        METH_VARARGS | METH_KEYWORDS,
+        "Check if every character in text is a Thai character.\n"
+    },
+    {
+        "count_thai",
+        (PyCFunction)(void(*)(void))py_count_thai,
+        METH_VARARGS | METH_KEYWORDS,
+        "Calculate percentage proportion of Thai characters.\n"
+    },
+    {
+        "arabic_digit_to_thai_digit",
+        py_arabic_digit_to_thai_digit,
+        METH_VARARGS,
+        "Convert Arabic digits to Thai digits.\n"
+    },
+    {
+        "thai_digit_to_arabic_digit",
+        py_thai_digit_to_arabic_digit,
+        METH_VARARGS,
+        "Convert Thai digits to Arabic digits.\n"
+    },
+    {
+        "remove_tonemark",
+        py_remove_tonemark,
+        METH_VARARGS,
+        "Remove Thai tone marks from text.\n"
+    },
+    {
+        "soundex_lk82",
+        py_soundex_lk82,
+        METH_VARARGS,
+        "Calculate LK82 soundex code for Thai text.\n"
+    },
+    {
+        "soundex_udom83",
+        py_soundex_udom83,
+        METH_VARARGS,
+        "Calculate Udom83 soundex code for Thai text.\n"
     },
     {NULL, NULL, 0, NULL}  /* Sentinel */
 };

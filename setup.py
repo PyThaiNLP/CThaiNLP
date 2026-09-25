@@ -1,6 +1,6 @@
 """Setup script for CThaiNLP Python bindings."""
 
-from setuptools import setup, Extension
+from setuptools import setup, Extension, find_packages
 import os
 import sys
 
@@ -23,6 +23,8 @@ cthainlp_extension = Extension(
         "src/trie.c",
         "src/tcc.c",
         "src/newmm.c",
+        "src/util.c",
+        "src/soundex.c",
         "python/cthainlp_wrapper.c",
     ],
     include_dirs=["include"],
@@ -38,7 +40,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/wannaphong/CThaiNLP",
-    packages=["cthainlp"],
+    packages=find_packages(),
     ext_modules=[cthainlp_extension],
     package_data={
         "cthainlp": ["data/*.txt"],
@@ -52,6 +54,7 @@ setup(
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
         "Programming Language :: C",
         "Topic :: Text Processing :: Linguistic",
     ],
