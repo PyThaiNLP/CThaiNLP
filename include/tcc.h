@@ -4,12 +4,15 @@
  * 
  * Implementation of tokenizer according to Thai Character Clusters (TCCs)
  * rules proposed by Theeramunkong et al. 2000.
+ * 
+ * Ported from PyThaiNLP (https://github.com/PyThaiNLP/pythainlp)
+ * 
+ * @author CThaiNLP
+ * @date 2026
  */
 
 #ifndef TCC_H
 #define TCC_H
-
-#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -18,7 +21,7 @@ extern "C" {
 /**
  * @brief Get valid Thai Character Cluster breaking positions
  * 
- * @param text Input Thai text (UTF-8)
+ * @param text Input Thai text (UTF-8 encoded)
  * @param positions Output array of byte positions (caller must free)
  * @return Number of positions found
  */
@@ -30,6 +33,7 @@ int tcc_pos(const char* text, int** positions);
  * @param text Input text (UTF-8 encoded)
  * @param token_count Output parameter for number of tokens found
  * @return Array of strings (tokens), caller must free with tcc_free_result()
+ *         Returns NULL on error or empty text
  */
 char** tcc_segment(const char* text, int* token_count);
 

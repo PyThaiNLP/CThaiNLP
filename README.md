@@ -27,10 +27,12 @@ See [Building](#building) section below.
 ## Features
 
 - **newmm**: Dictionary-based maximal matching word segmentation constrained by Thai Character Cluster (TCC) boundaries
-- Similar API to PyThaiNLP for easy migration from Python to C
-- UTF-8 support
-- Efficient Trie data structure for dictionary lookup
-- Handles mixed Thai/English/numeric content
+- **tcc**: Thai Character Cluster segmentation and position detection
+- **util**: Thai character checks, text counting, digit conversion (Arabic ↔ Thai), numbers to words (`num_to_thaiword`, `bahttext`), text normalization (`normalize`, `remove_tone`, `remove_dup_spaces`), and dictionary collation (`collate`)
+- **soundex**: Thai phonetic algorithms (`lk82`, `udom83`)
+- **Character constants**: `thai_consonants`, `thai_vowels`, `thai_digits`, `thai_tonemarks`, `thai_characters`, `thai_pangram`, etc.
+- **Tokenization**: `word_tokenize`, `subword_tokenize`, `sent_tokenize`, `display_cell_tokenize`, `word_detokenize`
+- **C Library** (`libcthainlp.a`) and unified C header (`cthainlp.h`) with sub-headers (`newmm.h`, `tcc.h`, `util.h`, `soundex.h`)
 - **Python bindings** with PyThaiNLP-compatible API
 
 ## Quick Start
@@ -38,27 +40,54 @@ See [Building](#building) section below.
 ### Python
 
 ```python
-from cthainlp import word_tokenize
+from cthainlp import word_tokenize, soundex, collate
+from cthainlp.util import bahttext, num_to_thaiword, is_thai, normalize
 
-# Tokenize Thai text
+# Word Tokenization
 text = "ฉันไปโรงเรียน"
-tokens = word_tokenize(text)
-print(tokens)  # ['ฉัน', 'ไป', 'โรงเรียน']
+print(word_tokenize(text))  # ['ฉัน', 'ไป', 'โรงเรียน']
+
+# Number to Thai Words & Bahttext
+print(num_to_thaiword(101))  # 'หนึ่งร้อยเอ็ด'
+print(bahttext(5611.50))     # 'ห้าพันหกร้อยสิบเอ็ดบาทห้าสิบสตางค์'
+
+# Thai Soundex
+print(soundex("รัก", engine="udom83"))  # 'ร100000'
+print(soundex("รัก", engine="lk82"))    # 'ร1000'
+
+# Text Normalization
+print(normalize("เเปลก"))  # 'แปลก'
+
+# Thai Collation (Alphabetical sorting)
+words = ["ไก่", "เกิด", "กาล", "เป็ด", "หมู"]
+print(collate(words))  # ['กาล', 'เกิด', 'ไก่', 'เป็ด', 'หมู']
 ```
 
 ### C
 
 ```c
-#include "newmm.h"
+#include "cthainlp.h"
+#include <stdio.h>
 
 int main() {
-    const char* text = "ฉันไปโรงเรียน";
-    int token_count;
-    char** tokens = newmm_segment(text, "data/thai_words.txt", &token_count);
-    
-    // Use tokens...
-    
-    newmm_free_result(tokens, token_count);
+    // Word Segmentation
+    int count;
+    char** tokens = newmm_segment("ฉันไปโรงเรียน", "data/thai_words.txt", &count);
+    for (int i = 0; i < count; i++) {
+        printf("%s\n", tokens[i]);
+    }
+    newmm_free_result(tokens, count);
+
+    // Utilities
+    char* th_digit = arabic_digit_to_thai_digit("123");
+    printf("Thai digits: %s\n", th_digit); // ๑๒๓
+    cthainlp_free_string(th_digit);
+
+    // Soundex
+    char* code = soundex_udom83("รัก");
+    printf("Soundex: %s\n", code); // ร100000
+    soundex_free(code);
+
     return 0;
 }
 ```
@@ -69,7 +98,7 @@ int main() {
 
 - GCC or compatible C compiler
 - Make
-- Python 3.7+ (for Python bindings)
+- Python 3.8+ (for Python bindings)
 
 ### C Library Compilation
 
@@ -80,6 +109,7 @@ make
 This will create:
 - Static library: `lib/libcthainlp.a`
 - Example program: `build/example_basic`
+- Test suites: `build/test_newmm`, `build/test_tcc`, `build/test_util`, `build/test_soundex`
 
 ### Python Package Installation
 
@@ -96,77 +126,128 @@ python setup.py build
 python setup.py install
 ```
 
-## Usage
+## Usage & API Reference
 
-### Python
+### Python API
 
-The Python API is designed to be compatible with PyThaiNLP:
+#### Tokenization (`cthainlp.tokenize` / `cthainlp`)
 
 ```python
-from cthainlp import word_tokenize
+from cthainlp import word_tokenize, sent_tokenize, subword_tokenize
+from cthainlp.tokenize import display_cell_tokenize, word_detokenize
 
-# Basic tokenization
-text = "ฉันไปโรงเรียน"
-tokens = word_tokenize(text)
-print(tokens)  # ['ฉัน', 'ไป', 'โรงเรียน']
+# Word segmentation
+word_tokenize("ฉันไปโรงเรียน", engine="newmm")
 
-# With custom dictionary
-tokens = word_tokenize(text, custom_dict="data/thai_words.txt")
+# Subword / TCC segmentation
+subword_tokenize("ฉันไปโรงเรียน", engine="tcc")
+# ['ฉั', 'น', 'ไป', 'โรง', 'เรี', 'ยน']
 
-# Specify engine explicitly
-tokens = word_tokenize(text, engine="newmm")
+# Sentence tokenization
+sent_tokenize("ฉันไปประชุมเมื่อวันที่ 11 มีนาคม", engine="whitespace")
+
+# Display cells (characters with tone marks attached)
+display_cell_tokenize("แม่น้ำ")
+
+# Detokenize words to text
+word_detokenize(["เรา", "เล่น"]) # 'เราเล่น'
 ```
 
-### C Library
+#### Thai Character Clusters (`cthainlp.tcc` / `cthainlp.tokenize.tcc`)
 
-#### Basic Example
+```python
+from cthainlp import tcc
 
-```c
-#include "newmm.h"
+# Segment into clusters
+clusters = tcc.segment("ฉันไปโรงเรียน")
 
-int main() {
-    const char* text = "ฉันไปโรงเรียน";
-    int token_count;
-    
-    // Segment text (with NULL for dict_path to use default dictionary)
-    char** tokens = newmm_segment(text, NULL, &token_count);
-    
-    // Print tokens
-    for (int i = 0; i < token_count; i++) {
-        printf("%s\n", tokens[i]);
-    }
-    
-    // Free memory
-    newmm_free_result(tokens, token_count);
-    
-    return 0;
-}
+# Cluster generator
+for c in tcc.tcc("สวัสดี"):
+    print(c)
+
+# Cluster ending positions
+positions = tcc.tcc_pos("ฉันไปโรงเรียน")
 ```
 
-### Compile Your Program
+#### Utilities (`cthainlp.util`)
+
+```python
+from cthainlp.util import (
+    is_thai,
+    is_thai_char,
+    count_thai,
+    arabic_digit_to_thai_digit,
+    thai_digit_to_arabic_digit,
+    digit_to_text,
+    num_to_thaiword,
+    bahttext,
+    normalize,
+    remove_tone,
+    remove_dup_spaces,
+    collate,
+)
+
+# Text checking
+is_thai("ภาษาไทย")      # True
+is_thai_char("ก")       # True
+count_thai("ไทย 123")   # 100.0 (ignoring digits/whitespace)
+
+# Digit conversion
+arabic_digit_to_thai_digit("123")  # '๑๒๓'
+thai_digit_to_arabic_digit("๑๒๓")  # '123'
+digit_to_text("123")               # 'หนึ่งสองสาม'
+
+# Number to Thai words
+num_to_thaiword(101)    # 'หนึ่งร้อยเอ็ด'
+bahttext(101.25)        # 'หนึ่งร้อยเอ็ดบาทยี่สิบห้าสตางค์'
+
+# Normalization
+normalize("เเปลก")       # 'แปลก'
+remove_tone("กิ่งก่า")    # 'กิงกา'
+remove_dup_spaces("ก   ข") # 'ก ข'
+
+# Collation
+collate(["ไก่", "เกิด", "กาล"]) # ['กาล', 'เกิด', 'ไก่']
+```
+
+#### Soundex (`cthainlp.soundex` / `cthainlp`)
+
+```python
+from cthainlp.soundex import soundex, lk82, udom83
+
+# Default engine is udom83
+soundex("รัก")                 # 'ร100000'
+soundex("รัก", engine="lk82")  # 'ร1000'
+lk82("รัก")                    # 'ร1000'
+udom83("รัก")                  # 'ร100000'
+```
+
+#### Character Constants (`cthainlp`)
+
+```python
+import cthainlp
+
+print(cthainlp.thai_consonants)   # 'กขฃคฅฆงจฉชซฌญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรลวศษสหฬอฮ'
+print(cthainlp.thai_vowels)       # Thai vowel characters
+print(cthainlp.thai_digits)       # '๐๑๒๓๔๕๖๗๘๙'
+print(cthainlp.thai_tonemarks)    # Thai tone marks
+print(cthainlp.thai_characters)   # All Thai Unicode characters
+print(cthainlp.thai_pangram)      # Thai pangram
+```
+
+### C Library API
+
+Headers in `include/`:
+- `cthainlp.h`: Umbrella header
+- `newmm.h`: `newmm_segment`, `newmm_segment_with_dict`, `newmm_load_dict`, `newmm_free_dict`, `newmm_free_result`
+- `tcc.h`: `tcc_segment`, `tcc_pos`, `tcc_free_result`
+- `util.h`: `is_thai`, `is_thai_char`, `is_thai_codepoint`, `count_thai`, `arabic_digit_to_thai_digit`, `thai_digit_to_arabic_digit`, `remove_tonemark`, `cthainlp_free_string`
+- `soundex.h`: `soundex_lk82`, `soundex_udom83`, `soundex_free`
+
+### Compile Your C Program
 
 ```bash
 gcc your_program.c -I./include -L./lib -lcthainlp -o your_program
-```
-
-### Running Examples
-
-#### Python Example
-
-```bash
-python examples/python/example_basic.py
-```
-
-#### C Example
-
-Basic example with default dictionary:
-```bash
-./build/example_basic "ฉันไปโรงเรียน"
-```
-
-With custom dictionary:
-```bash
-./build/example_basic "ฉันไปโรงเรียน" data/thai_words.txt
 ```
 
 ### Running Tests
@@ -174,141 +255,70 @@ With custom dictionary:
 #### Python Tests
 
 ```bash
-python tests/python/test_tokenize.py
+python -m unittest discover -s tests/python
 ```
 
 #### C Tests
 
-Run the C test suite:
 ```bash
 make test
 ```
-
-This will compile and run all unit tests to verify the tokenizer is working correctly.
-
-## API Reference
-
-### Functions
-
-#### `char** newmm_segment(const char* text, const char* dict_path, int* token_count)`
-
-Segment Thai text into words using the newmm algorithm.
-
-**Parameters:**
-- `text`: Input text to segment (UTF-8 encoded)
-- `dict_path`: Path to dictionary file (one word per line, UTF-8). Use `NULL` for default dictionary
-- `token_count`: Output parameter - receives the number of tokens found
-
-**Returns:**
-- Array of strings (tokens), or `NULL` on error
-- Caller must free the result using `newmm_free_result()`
-
-**Example:**
-```c
-int count;
-char** tokens = newmm_segment("ฉันไปโรงเรียน", "dict.txt", &count);
-```
-
-#### `void newmm_free_result(char** tokens, int token_count)`
-
-Free memory allocated by `newmm_segment()`.
-
-**Parameters:**
-- `tokens`: Array of tokens returned by `newmm_segment()`
-- `token_count`: Number of tokens in the array
-
-**Example:**
-```c
-newmm_free_result(tokens, count);
-```
-
-## Dictionary Format
-
-Dictionary files should contain one word per line in UTF-8 encoding:
-
-```
-ฉัน
-ไป
-โรงเรียน
-วันนี้
-อากาศ
-ดี
-มาก
-```
-
-A sample dictionary is provided in `data/thai_words.txt`.
-
-## Comparison with PyThaiNLP
-
-CThaiNLP provides both C and Python APIs. The Python API is designed to be compatible with PyThaiNLP's `word_tokenize()` function:
-
-**PyThaiNLP:**
-```python
-from pythainlp.tokenize import word_tokenize
-
-text = "ฉันไปโรงเรียน"
-tokens = word_tokenize(text, engine="newmm")
-print(tokens)  # ['ฉัน', 'ไป', 'โรงเรียน']
-```
-
-**CThaiNLP Python:**
-```python
-from cthainlp import word_tokenize
-
-text = "ฉันไปโรงเรียน"
-tokens = word_tokenize(text, engine="newmm")
-print(tokens)  # ['ฉัน', 'ไป', 'โรงเรียน']
-```
-
-**CThaiNLP (C):**
-```c
-const char* text = "ฉันไปโรงเรียน";
-int token_count;
-char** tokens = newmm_segment(text, NULL, &token_count);
-// tokens = ['ฉัน', 'ไป', 'โรงเรียน']
-newmm_free_result(tokens, token_count);
-```
-
-## Algorithm
-
-The newmm (New Maximum Matching) algorithm:
-
-1. **Trie-based Dictionary Lookup**: Uses a trie data structure for efficient prefix matching
-2. **Thai Character Cluster (TCC) Boundaries**: Respects Thai character cluster rules for valid word boundaries
-3. **Maximal Matching**: Finds the longest dictionary word that matches at each position
-4. **Fallback Handling**: Handles non-dictionary words and non-Thai characters (Latin, digits, etc.)
 
 ## Project Structure
 
 ```
 CThaiNLP/
 ├── include/
-│   └── newmm.h             # Public C API header
+│   ├── cthainlp.h          # Umbrella public header
+│   ├── newmm.h             # Word segmentation header
+│   ├── tcc.h               # Thai Character Cluster header
+│   ├── util.h              # Utility functions header
+│   └── soundex.h           # Thai soundex header
 ├── src/
 │   ├── newmm.c             # Main newmm implementation
 │   ├── trie.c              # Trie data structure
-│   ├── trie.h              # Trie header
-│   ├── tcc.c               # Thai Character Cluster
-│   └── tcc.h               # TCC header
+│   ├── trie.h              # Trie internal header
+│   ├── tcc.c               # Thai Character Cluster implementation
+│   ├── tcc.h               # TCC internal header
+│   ├── util.c              # Utility functions implementation
+│   └── soundex.c           # Soundex implementation
 ├── python/
 │   └── cthainlp_wrapper.c  # Python C extension wrapper
 ├── cthainlp/
-│   ├── __init__.py         # Python package
-│   └── tokenize.py         # Python tokenization API
-├── examples/
-│   ├── example_basic.c     # C usage example
-│   └── python/
-│       └── example_basic.py # Python usage example
+│   ├── __init__.py         # Package root & character constants
+│   ├── newmm.py            # newmm module
+│   ├── tcc.py              # TCC convenience module
+│   ├── tokenize/           # Tokenization subpackage
+│   │   ├── __init__.py     # word_tokenize, sent_tokenize, subword_tokenize, etc.
+│   │   └── tcc.py          # TCC tokenization submodule
+│   ├── util/               # Utilities subpackage
+│   │   ├── __init__.py     # util root exports
+│   │   ├── thai.py         # is_thai, is_thai_char, count_thai
+│   │   ├── digitconv.py    # Arabic ↔ Thai digit conversion
+│   │   ├── numtoword.py    # num_to_thaiword, bahttext
+│   │   ├── normalize.py    # Text normalization
+│   │   └── collate.py      # Thai alphabetical collation
+│   └── soundex/            # Soundex subpackage
+│       ├── __init__.py     # soundex function
+│       ├── lk82.py         # LK82 soundex
+│       └── udom83.py       # Udom83 soundex
 ├── tests/
-│   ├── test_newmm.c        # C test suite
+│   ├── test_newmm.c        # newmm C test suite
+│   ├── test_tcc.c          # TCC C test suite
+│   ├── test_util.c         # Util C test suite
+│   ├── test_soundex.c      # Soundex C test suite
 │   └── python/
-│       └── test_tokenize.py # Python test suite
+│       ├── test_tokenize.py # Tokenize Python tests
+│       ├── test_tcc.py      # TCC Python tests
+│       ├── test_util.py     # Util Python tests
+│       ├── test_soundex.py  # Soundex Python tests
+│       └── test_constants.py # Constants Python tests
 ├── data/
-│   └── thai_words.txt      # Sample dictionary
+│   └── thai_words.txt      # Default word dictionary
 ├── setup.py                # Python package setup
 ├── pyproject.toml          # Python build configuration
 ├── Makefile                # Build configuration
-└── README.md               # This file
+└── README.md               # Documentation
 ```
 
 ## Credits
@@ -316,20 +326,9 @@ CThaiNLP/
 - Original PyThaiNLP implementation: [PyThaiNLP Project](https://github.com/PyThaiNLP/pythainlp)
 - newmm algorithm: Based on work by Korakot Chaovavanich
 - TCC rules: Theeramunkong et al. 2000
+- LK82 soundex: Vichit Lorchirachoonkul 1982
+- Udom83 soundex: Wannee Udompanich 1983
 
 ## License
 
 Apache License 2.0 (following PyThaiNLP's license)
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit issues or pull requests.
-
-## Future Enhancements
-
-- [ ] Add more tokenization engines (attacut, deepcut, etc.)
-- [ ] Improve performance with optimized data structures
-- [ ] Add part-of-speech tagging
-- [ ] Add named entity recognition
-- [x] Provide Python bindings
-- [ ] Publish to PyPI
