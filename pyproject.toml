@@ -7,7 +7,7 @@ name = "cthainlp"
 version = "0.1.0"
 description = "Python bindings for CThaiNLP - Thai Natural Language Processing library in C"
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.9"
 license = {text = "Apache-2.0"}
 authors = [
     {name = "Wannaphong Phatthiyaphaibun"}
@@ -17,11 +17,11 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Programming Language :: C",
     "Topic :: Text Processing :: Linguistic",
 ]
@@ -29,3 +29,17 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/wannaphong/CThaiNLP"
 Repository = "https://github.com/wannaphong/CThaiNLP"
+
+[tool.cibuildwheel]
+skip = ["pp*", "cp36-*", "cp37-*", "cp38-*"]
+build-verbosity = 1
+test-command = "python -c \"import cthainlp; tokens = cthainlp.word_tokenize('ฉันไปโรงเรียน'); print('Tokenized:', tokens); assert len(tokens) > 0\""
+
+[tool.cibuildwheel.linux]
+archs = ["auto", "aarch64"]
+
+[tool.cibuildwheel.macos]
+archs = ["auto"]
+
+[tool.cibuildwheel.windows]
+archs = ["auto"]
