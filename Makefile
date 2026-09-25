@@ -85,8 +85,15 @@ test: dirs $(ALL_TESTS)
 	./$(TEST_UTIL)
 	./$(TEST_SOUNDEX)
 
+# Benchmark target
+benchmark:
+	python3 examples/python/benchmark.py --report BENCHMARK.md
+
+benchmark-quick:
+	python3 examples/python/benchmark.py --quick
+
 # Clean
 clean:
 	rm -rf $(BUILD_DIR) $(LIB_DIR)
 
-.PHONY: all dirs clean test
+.PHONY: all dirs clean test benchmark benchmark-quick
