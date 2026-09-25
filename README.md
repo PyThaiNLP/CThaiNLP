@@ -250,6 +250,32 @@ Headers in `include/`:
 gcc your_program.c -I./include -L./lib -lcthainlp -o your_program
 ```
 
+### Running C Examples
+
+#### 1. Basic Tokenization Example
+
+```bash
+./build/example_basic "ฉันไปโรงเรียน"
+```
+
+#### 2. Word Count CLI Tool (`count_words`)
+
+Count Thai words from a text file, compute unique word counts, and list word frequencies:
+
+```bash
+# Analyze a text file
+./build/count_words examples/sample_thai.txt
+
+# Show top 20 most frequent Thai words
+./build/count_words -t 20 examples/sample_thai.txt
+
+# Output word count only (convenient for shell pipelines)
+cat examples/sample_thai.txt | ./build/count_words -w
+
+# Use a custom dictionary
+./build/count_words -d data/thai_words.txt examples/sample_thai.txt
+```
+
 ### Running Tests
 
 #### Python Tests
@@ -313,6 +339,13 @@ CThaiNLP/
 │       ├── test_util.py     # Util Python tests
 │       ├── test_soundex.py  # Soundex Python tests
 │       └── test_constants.py # Constants Python tests
+├── examples/
+│   ├── example_basic.c     # Basic tokenization example
+│   ├── count_words.c       # Word count CLI example tool
+│   ├── sample_thai.txt     # Sample Thai text file
+│   └── python/
+│       ├── example_basic.py # Python usage example
+│       └── benchmark.py    # Performance benchmark
 ├── data/
 │   └── thai_words.txt      # Default word dictionary
 ├── setup.py                # Python package setup

@@ -21,6 +21,8 @@ LIBRARY = $(LIB_DIR)/libcthainlp.a
 
 # Example programs
 EXAMPLE_BASIC = $(BUILD_DIR)/example_basic
+COUNT_WORDS = $(BUILD_DIR)/count_words
+EXAMPLES = $(EXAMPLE_BASIC) $(COUNT_WORDS)
 
 # Test programs
 TEST_NEWMM = $(BUILD_DIR)/test_newmm
@@ -30,7 +32,7 @@ TEST_SOUNDEX = $(BUILD_DIR)/test_soundex
 ALL_TESTS = $(TEST_NEWMM) $(TEST_TCC) $(TEST_UTIL) $(TEST_SOUNDEX)
 
 # Default target
-all: dirs $(LIBRARY) $(EXAMPLE_BASIC) $(ALL_TESTS)
+all: dirs $(LIBRARY) $(EXAMPLES) $(ALL_TESTS)
 
 # Create directories
 dirs:
@@ -58,6 +60,9 @@ $(LIBRARY): $(OBJECTS) | dirs
 
 # Build example programs
 $(EXAMPLE_BASIC): $(EXAMPLES_DIR)/example_basic.c $(LIBRARY) | dirs
+	$(CC) $(CFLAGS) $< -L$(LIB_DIR) -lcthainlp -o $@
+
+$(COUNT_WORDS): $(EXAMPLES_DIR)/count_words.c $(LIBRARY) | dirs
 	$(CC) $(CFLAGS) $< -L$(LIB_DIR) -lcthainlp -o $@
 
 # Build test programs
